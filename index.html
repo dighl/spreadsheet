@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<!-- xlsx.js (C) 2013-2014 SheetJS http://sheetjs.com -->
+<!-- vim: set ts=2: -->
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>STARLING to LingPy Converter</title>
+<style>
+#drop{
+	border:2px dashed #bbb;
+	-moz-border-radius:5px;
+	-webkit-border-radius:5px;
+	border-radius:5px;
+	padding:25px;
+	text-align:center;
+	font:20pt bold,"Vollkorn";color:#bbb
+}
+#b64data{
+	width:100%;
+}
+</style>
+</head>
+<body>
+  <h1>Starling to LingPy Converter (powered by 
+    <a href="https://github.com/SheetJS/js-xlsx">js-xlsx</a>)</h1>
+
+  <p><input name="xlfile" id="xlf" type="file" /></p>
+  <div id="drop">Drop your STARLING XLSX file here to convert your data...</div>
+
+<div style="display:none">
+<textarea id="b64data">... or paste a base64-encoding here</textarea>
+<input id="dotext" value="Click here to process the base64 text" onclick="b64it();" type="button"><br>
+Advanced Demo Options: <br>
+Use Web Workers: (when available) <input name="useworker" checked="checked" type="checkbox"><br>
+Use Transferrables: (when available) <input name="xferable" checked="checked" type="checkbox"><br>
+Use readAsBinaryString: (when available) <input name="userabs" checked="checked" type="checkbox"><br>
+</div>
+<div id="message"></div>
+<div id="out2" style="background-color:gray;display:none;">
+  <pre id="out2"><code onclick="saveData();" style="color:white;" id="out"></code> 
+</pre>
+</div>
+
+<!-- uncomment the next line here and in xlsxworker.js for encoding support -->
+<!--<script src="dist/cpexcel.js"></script>-->
+<script src="js/FileSaver.js" type="text/javascript"></script>
+<script src="js/ga.js" async="" type="text/javascript"></script>
+<script src="js/shim.js"></script>
+<script src="js/jszip.js"></script>
+<script src="js/xlsx.js"></script>
+<script>
+var CFG = {};
+var rABS = typeof FileReader !== "undefined" && typeof FileReader.prototype !== "undefined" && typeof FileReader.prototype.readAsBinaryString !== "undefined";
+if(!rABS) {
+	document.getElementsByName("userabs")[0].disabled = true;
+	document.getElementsByName("userabs")[0].checked = false;
+}
+
+var use_worker = typeof Worker !== 'undefined';
+if(!use_worker) {
+	document.getElementsByName("useworker")[0].disabled = true;
+	document.getElementsByName("useworker")[0].checked = false;
+}
+
+var transferable = use_worker;
+if(!transferable) {
+	document.getElementsByName("xferable")[0].disabled = true;
+	document.getElementsByName("xferable")[0].checked = false;
+}
+
+var wtf_mode = false;
+
+function fixdata(data) {
+	var o = "", l = 0, w = 10240;
+	for(; l<data.byteLength/w; ++l) o+=String.fromCharCode.apply(null,new Uint8Array(data.slice(l*w,l*w+w)));
+	o+=String.fromCharCode.apply(null, new Uint8Array(data.slice(l*w)));
+	return o;
+}
+
+function ab2str(data) {
+	var o = "", l = 0, w = 10240;
+	for(; l<data.byteLength/w; ++l) o+=String.fromCharCode.apply(null,new Uint16Array(data.slice(l*w,l*w+w)));
+	o+=String.fromCharCode.apply(null, new Uint16Array(data.slice(l*w)));
+	return o;
+}
+
+function s2ab(s) {
+	var b = new ArrayBuffer(s.length*2), v = new Uint16Array(b);
+	for (var i=0; i != s.length; ++i) v[i] = s.charCodeAt(i);
+	return [v, b];
+}
+
+function xlsxworker_noxfer(data, cb) {
+	var worker = new Worker('./xlsxworker.js');
+	worker.onmessage = function(e) {
+		switch(e.data.t) {
+			case 'ready': break;
+			case 'e': console.error(e.data.d); break;
+			case 'xlsx': cb(JSON.parse(e.data.d)); break;
+		}
+	};
+	var arr = rABS ? data : btoa(fixdata(data));
+	worker.postMessage({d:arr,b:rABS});
+}
+
+function xlsxworker_xfer(data, cb) {
+	var worker = new Worker(rABS ? 'js/xlsxworker2.js' : './xlsxworker1.js');
+	worker.onmessage = function(e) {
+		switch(e.data.t) {
+			case 'ready': break;
+			case 'e': console.error(e.data.d); break;
+			default: xx=ab2str(e.data).replace(/\n/g,"\\n").replace(/\r/g,"\\r"); console.log("done"); cb(JSON.parse(xx)); break;
+		}
+	};
+	if(rABS) {
+		var val = s2ab(data);
+		worker.postMessage(val[1], [val[1]]);
+	} else {
+		worker.postMessage(data, [data]);
+	}
+}
+
+function xlsxworker(data, cb) {
+	transferable = document.getElementsByName("xferable")[0].checked;
+	if(transferable) xlsxworker_xfer(data, cb);
+	else xlsxworker_noxfer(data, cb);
+}
+
+function get_radio_value( radioName ) {
+	var radios = document.getElementsByName( radioName );
+	for( var i = 0; i < radios.length; i++ ) {
+		if( radios[i].checked || radios.length === 1 ) {
+			return radios[i].value;
+		}
+	}
+}
+
+function to_json(workbook) {
+	var result = {};
+	workbook.SheetNames.forEach(function(sheetName) {
+		var roa = XLSX.utils.sheet_to_row_object_array(workbook.Sheets[sheetName]);
+		if(roa.length > 0){
+			result[sheetName] = roa;
+		}
+	});
+	return result;
+}
+
+function clean_taxa(taxon) {
+
+  return taxon.replace(/ /g,'_').replace('(','').replace(')','');
+}
+
+/* save file */
+function saveData()
+{
+
+  var blob = new Blob([CFG['data']], {type: 'text/plain;charset=utf-8'});
+  saveAs(blob, CFG['filename'].replace('.xlsx','.qlc'));
+}
+
+function process_wb(wb) {
+
+	var output = "";
+  var json = to_json(wb);
+  
+  /* get taxa */
+  var taxa = [];
+  for(key in json['Sheet1'][0]) {
+    if (key.slice(0,2) != '__' && key.indexOf('#') != key.length -1 && key.indexOf('Number') == -1 && key.indexOf('Word') == -1) {
+      taxa.push(key);
+    }
+  }
+  var table = {};
+  var cognate_counter = 0;
+  var current_gloss = '';
+  var idx = 1;
+  var cognate_sets = [];
+  var keys = [0];
+  for (var i=1,line; line=json['Sheet1'][i]; i++) {
+    var gloss = line['Word'];
+    var num = line['Number'];
+    for (var j=0,taxon; taxon = taxa[j]; j++) {
+      var word = line[taxon];
+      var cogid = parseInt(line[taxon+' #']);
+      if (cogid != 0 && typeof word != 'undefined') {
+        if (gloss != current_gloss) {
+          cognate_counter += cognate_sets.length;
+          cognate_sets = [];
+          current_gloss = gloss;
+        }
+        
+        var bidx = word.indexOf('{');
+        if (bidx != -1) {
+          var ipa = word.slice(0,bidx);
+          var ort = word.slice(bidx+1,word.length-2);
+        }
+        else {
+          var ipa = word;
+          var ort = word;
+        }
+        if(cogid > 0) {
+          cogid = cognate_counter + cogid;
+          if (cognate_sets.indexOf(cogid) == -1) {
+            cognate_sets.push(cogid);
+          }
+        }
+        table[idx] = [clean_taxa(taxon),gloss,num,word,ort,ipa,cogid];
+        keys.push(idx);
+        idx += 1;
+      }
+    }
+  }
+  /* clean table for negative cognate sets */
+  cognate_counter += 1;
+  for (key in table) {
+    if(table[key][6] < 0) {
+      table[key][6] = -cognate_counter;
+      cognate_counter += 1;
+    }
+  }
+  table[0] = ['TAXA','GLOSS','GLOSSID','STARLING','ORTHOGRAPHY',"IPA","COGID"];
+  
+  console.log(keys);
+  old_concept = '';
+  for (var i=0; i < keys.length; i++) {
+    key = keys[i];
+    if(i == 0) {
+      var key_name = 'ID';
+    }
+    else {
+      var key_name = i;
+    }
+    var concept = table[key][1];
+    if(old_concept != concept && i != 0) {
+      output += '#\n';
+      old_concept = concept;
+    }
+
+    output += key_name+'\t'+table[key].join('\t')+'\n';
+  }
+  CFG['data'] = output;
+  
+  console.log(table);
+  var out = document.getElementById('out');
+  out.innerHTML = output;
+  document.getElementById('out2').style.display = 'block';
+  document.getElementById('message').innerHTML = '<br><br> Check below if your file has been successfully converted. Click ' +
+    ' <span onclick="saveData();" style="cursor:pointer;background-color:red;border: 1px solid blue;">here</span> to download '+
+    'the converted file &quot;'+CFG['filename'].replace('.xlsx','.qlc')+'&quot;';
+}
+
+var drop = document.getElementById('drop');
+function handleDrop(e) {
+	e.stopPropagation();
+	e.preventDefault();
+	rABS = document.getElementsByName("userabs")[0].checked;
+	use_worker = document.getElementsByName("useworker")[0].checked;
+	var files = e.dataTransfer.files;
+	var i,f;
+	for (i = 0, f = files[i]; i != files.length; ++i) {
+		var reader = new FileReader();
+		var name = f.name;
+    CFG['filename'] = name;
+		reader.onload = function(e) {
+			if(typeof console !== 'undefined') console.log("onload", new Date(), rABS, use_worker);
+			var data = e.target.result;
+			if(use_worker) {
+				xlsxworker(data, process_wb);
+			} else {
+				var wb;
+				if(rABS) {
+					wb = XLSX.read(data, {type: 'binary'});
+				} else {
+				var arr = fixdata(data);
+					wb = XLSX.read(btoa(arr), {type: 'base64'});
+				}
+				process_wb(wb);
+			}
+		};
+		if(rABS) reader.readAsBinaryString(f);
+		else reader.readAsArrayBuffer(f);
+	}
+}
+
+function handleDragover(e) {
+	e.stopPropagation();
+	e.preventDefault();
+	e.dataTransfer.dropEffect = 'copy';
+}
+
+if(drop.addEventListener) {
+	drop.addEventListener('dragenter', handleDragover, false);
+	drop.addEventListener('dragover', handleDragover, false);
+	drop.addEventListener('drop', handleDrop, false);
+}
+
+
+var xlf = document.getElementById('xlf');
+function handleFile(e) {
+	rABS = document.getElementsByName("userabs")[0].checked;
+	use_worker = document.getElementsByName("useworker")[0].checked;
+	var files = e.target.files;
+	var i,f;
+	for (i = 0, f = files[i]; i != files.length; ++i) {
+		var reader = new FileReader();
+		var name = f.name;
+    CFG['filename'] = name;
+		reader.onload = function(e) {
+			if(typeof console !== 'undefined') console.log("onload", new Date(), rABS, use_worker);
+			var data = e.target.result;
+			if(use_worker) {
+				xlsxworker(data, process_wb);
+			} else {
+				var wb;
+				if(rABS) {
+					wb = XLSX.read(data, {type: 'binary'});
+				} else {
+				var arr = fixdata(data);
+					wb = XLSX.read(btoa(arr), {type: 'base64'});
+				}
+				process_wb(wb);
+			}
+		};
+		if(rABS) reader.readAsBinaryString(f);
+		else reader.readAsArrayBuffer(f);
+	}
+}
+
+if(xlf.addEventListener) xlf.addEventListener('change', handleFile, false);
+</script>
+<script type="text/javascript">
+	var _gaq = _gaq || [];
+	_gaq.push(['_setAccount', 'UA-36810333-1']);
+	_gaq.push(['_trackPageview']);
+
+	(function() {
+		var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+		ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+		var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+	})();
+</script>
+
+
+</body></html>
