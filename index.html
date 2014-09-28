@@ -24,7 +24,12 @@
 <body>
   <h2>Starling to LingPy Converter (powered by 
     <a href="https://github.com/SheetJS/js-xlsx">js-xlsx</a> and <a href="http://www.datatables.net/">DataTables.js</a>)</h2>
-
+  <p>Select the format of your spreadsheet: 
+  <select id="formats">
+    <option selected value="starling">STARLING</option>
+    <option value="reflex">REFLEXES</option>
+  </select>
+  </p>
   <p><input name="xlfile" id="xlf" type="file" /></p>
   <div id="drop">Drop your STARLING XLSX file here to convert your data...</div>
 

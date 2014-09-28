@@ -182,20 +182,24 @@ function clean_taxa(taxon) {
 /* save file */
 function saveData()
 {
-
   var blob = new Blob([CFG['data']], {type: 'text/plain;charset=utf-8'});
   saveAs(blob, CFG['filename'].replace('.xlsx','.qlc'));
 }
 
-/* process the excel file */
-function process_wb(wb) {
 
-	var output = "";
-  var json = to_json(wb);
+function process_starling(json) {
+  /* check for sheet, take the first */
+  var json_keys = Object.keys(json);
+  if (json_keys.length == 1) {
+    var sheet = json_keys[0];
+  }
+  else {
+    var sheet = json_keys[0];
+  }
   
   /* get taxa */
   var taxa = [];
-  for(key in json['Sheet1'][0]) {
+  for(key in json[sheet][0]) {
     if (key.slice(0,2) != '__' && key.indexOf('#') != key.length -1 && key.indexOf('Number') == -1 && key.indexOf('Word') == -1) {
       taxa.push(key);
     }
@@ -269,7 +273,126 @@ function process_wb(wb) {
     }
     output += table[i].join('\t')+'\n';
   }
+
   CFG['data'] = output;
+  return table;
+}
+
+function clean_reflex (reflex) {
+  reflex = reflex.split(/[,;\/]/)[0];
+  reflex = reflex.replace(/-/g,'+');
+  reflex = reflex.replace(/\s/g,'_');
+  reflex = reflex.replace(/\[.*\]/g,'');
+  reflex = reflex.replace(/\(.*\)/g,'');
+  reflex = reflex.replace(/^\+/,'');
+  reflex = reflex.replace(/\+$/,'');
+
+  return reflex;
+}
+
+function process_reflexes(json) {
+  
+  /* get the sheet name */
+  var json_keys = Object.keys(json);
+  var sheet = json_keys[0];
+
+  /* iterate over table first line and get taxon names and glosses */
+  var taxa = [];
+  var varia = [];
+  var gloss_name = 'CONCEPT';
+  var proto_name = 'PROTO';
+  for (key in json[sheet][0]) {
+    if (key.toUpperCase().indexOf('LNG') == key.length - 3) {
+      taxa.push(key);
+    }
+    else if (['GLOSS','CONCEPT'].indexOf(key.replace(/\s/g,'').toUpperCase()) != -1) {
+      gloss_name = key;
+    }
+    else if(['PROTO'].indexOf(key.replace(/\s/g,'').toUpperCase()) != -1) {
+      proto_name = key;
+    }
+    else {
+      if (key.slice(0,2) != '__') {
+        varia.push(key);
+      }
+    }
+  }
+  console.log(varia);
+  console.log(json[sheet][0]);
+
+  var table = [];
+  var header = ['ID','DOCULECT','CONCEPT','COUNTERPART','IPA','PROTO', 'COGID'];
+  for (var i=0,vario; vario=varia[i]; i++) {
+    header.push(vario.toUpperCase());
+  }
+  table.push(header);
+
+  /* iterate over list now and assign stuff */
+  idx = 1;
+  cogid = 1;
+  for (var i=0,line; line=json[sheet][i]; i++) {
+    /* get concept, proto, and varia */
+    var concept = line[gloss_name];
+    var proto = line[proto_name];
+    var tmp_var = [];
+    for (var j=0,vario; vario=varia[j]; j++) {
+      tmp_vario = line[vario];
+      if (typeof tmp_vario != 'undefined') {
+        tmp_var.push(tmp_vario);
+      }
+      else {
+        tmp_var.push('-');
+      }
+    }
+    for (var j=0,taxon; taxon=taxa[j]; j++) {
+      /* get the reflex */
+      var reflex = line[taxon];
+      var tax_name = taxon.replace(/\sLNG$/,'');
+
+      /* check reflex */
+      if (typeof reflex != 'undefined') {
+        if (reflex.replace(/-/g,'').replace(/\s/g,'') != '') {
+          var ipa = clean_reflex(reflex);
+          var tmp_line = [idx,tax_name,concept,reflex,ipa,proto,cogid];
+          for (var k=0; k < tmp_var.length; k++) {
+            tmp_line.push(tmp_var[k]);
+          }
+          table.push(tmp_line);
+          idx += 1;
+        }
+      }
+    }
+    cogid += 1;
+  }
+  var output = '';
+  for (var i=0,line; line=table[i]; i++) {
+    output += line.join('\t')+'\n';
+  }
+  CFG['data'] = output;
+
+  return table;
+}
+/* process the excel file */
+function process_wb(wb) {
+
+	var output = "";
+  var json = to_json(wb);
+  
+  /* check for select options */
+  var options = document.getElementById('formats');
+  var current_option = '';
+  for (var i=0,option; option=options[i]; i++) {
+    if(option.selected) {
+      current_option = option.value;
+      break;
+    }
+  }
+  if (current_option == 'starling') {
+    var table = process_starling(json);
+  }
+  else {
+    var table = process_reflexes(json);
+  }
   
   /* create starling table */
   $('#starling').html('<table cellpadding="0" cellspacing="0" border="0" class="display" id="starling_table"></table>' );
