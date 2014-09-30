@@ -263,6 +263,7 @@ function process_starling(json) {
     }
   }
   
+  var output = '';
   console.log(keys);
   old_concept = '';
   for (var i=0; i < table.length; i++) {//keys.length; i++) {
