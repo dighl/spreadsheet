@@ -199,20 +199,35 @@ function process_starling(json) {
   
   /* get taxa */
   var taxa = [];
-  for(key in json[sheet][0]) {
-    if (key.slice(0,2) != '__' && key.indexOf('#') != key.length -1 && key.indexOf('Number') == -1 && key.indexOf('Word') == -1) {
-      taxa.push(key);
-    }
+
+  /* determine names with numbers first */
+  for (key in json[sheet][0]) {
+    if (key.indexOf('#') == key.length -1) {
+      taxa.push(key.slice(0,key.length -2))
+      }        
   }
-  var table =[["ID",'TAXA','GLOSS','GLOSSID','STARLING','ORTHOGRAPHY',"IPA","COGID"]];
+  //for(key in json[sheet][0]) {
+  //  if (key.slice(0,2) != '__' 
+  //      && key.indexOf('#') != key.length -1 
+  //      && key.indexOf('Number') == -1 
+  //      && key.indexOf('Word') == -1
+  //      && key.indexOf('Note') == -1) {
+  //    taxa.push(key);
+  //  }
+  //}
+  var table =[["ID",'TAXA','GLOSS','GLOSSID','ORIGINALGLOSS','STARLING','ORTHOGRAPHY',"IPA","COGID"]];
   var cognate_counter = 0;
   var current_gloss = '';
   var idx = 1;
   var cognate_sets = [];
   var keys = [0];
   for (var i=1,line; line=json['Sheet1'][i]; i++) {
-    var gloss = line['Word'];
+    var original_gloss = line['Word'];
     var num = line['Number'];
+    var gloss = TOB[num];
+    if (typeof gloss == 'undefined') {
+      gloss = original_gloss;
+    }
     for (var j=0,taxon; taxon = taxa[j]; j++) {
       var word = line[taxon];
       var cogid = parseInt(line[taxon+' #']);
@@ -247,7 +262,7 @@ function process_starling(json) {
               cognate_sets.push(cogid);
             }
           }
-          table.push([idx,clean_taxa(taxon),gloss,num,word,ort,ipa,cogid]);
+          table.push([idx,clean_taxa(taxon),gloss,num,original_gloss,word,ort,ipa,cogid]);
           keys.push(idx);
           idx += 1;
         }
