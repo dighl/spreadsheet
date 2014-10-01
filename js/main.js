@@ -199,23 +199,18 @@ function process_starling(json) {
   
   /* get taxa */
   var taxa = [];
-
+  var proto = '';
   /* determine names with numbers first */
   for (key in json[sheet][0]) {
-    if (key.indexOf('#') == key.length -1) {
-      taxa.push(key.slice(0,key.length -2))
-      }        
+    if (key.indexOf('#') == key.length -1 && key.toLowerCase().indexOf('proto') != -1) {
+      proto = key.slice(0,key.length -2);
+    }
+    else if (key.indexOf('#') == key.length -1) {
+      taxa.push(key.slice(0,key.length -2))  
+    } 
   }
-  //for(key in json[sheet][0]) {
-  //  if (key.slice(0,2) != '__' 
-  //      && key.indexOf('#') != key.length -1 
-  //      && key.indexOf('Number') == -1 
-  //      && key.indexOf('Word') == -1
-  //      && key.indexOf('Note') == -1) {
-  //    taxa.push(key);
-  //  }
-  //}
-  var table =[["ID",'TAXA','GLOSS','GLOSSID','ORIGINALGLOSS','STARLING','ORTHOGRAPHY',"IPA","COGID"]];
+  
+  var table =[["ID",'TAXA','GLOSS','GLOSSID','ORIGINALGLOSS','STARLING','ORTHOGRAPHY',"IPA","COGID","PROTO"]];
   var cognate_counter = 0;
   var current_gloss = '';
   var idx = 1;
@@ -225,6 +220,20 @@ function process_starling(json) {
     var original_gloss = line['Word'];
     var num = line['Number'];
     var gloss = TOB[num];
+    var proto_form = line[proto];
+    var proto_num = line[proto+' #'];
+    if(typeof proto_form == 'undefined') {
+      proto_form = '?';
+      proto_num = '?';
+    }
+    else {
+      proto_num = parseInt(proto_num);
+      if(proto_num <= 0) {
+        proto_num = '??';
+      }
+    }
+    console.log(gloss, num, proto_form, proto_num);
+
     if (typeof gloss == 'undefined') {
       gloss = original_gloss;
     }
@@ -237,6 +246,7 @@ function process_starling(json) {
             cognate_counter += cognate_sets.length;
             cognate_sets = [];
             current_gloss = gloss;
+            proto_num += cognate_counter;
           }
           
           var bidx = word.indexOf('{');
@@ -254,7 +264,7 @@ function process_starling(json) {
           ipa = ipa.replace(/[-\s]\s*$/,'');
           ipa = ipa.replace(/-/g,'+');
           ipa = ipa.replace('=','');
-          ipa = ipa.replace(/ /g,'_')
+          ipa = ipa.replace(/ /g,'_') 
 
           if(cogid > 0) {
             cogid = cognate_counter + cogid;
@@ -262,7 +272,14 @@ function process_starling(json) {
               cognate_sets.push(cogid);
             }
           }
-          table.push([idx,clean_taxa(taxon),gloss,num,original_gloss,word,ort,ipa,cogid]);
+          
+          if (cogid == proto_num) {
+            var this_pform = proto_form;
+          }
+          else {
+            var this_pform = '?';
+          }
+          table.push([idx,clean_taxa(taxon),gloss,num,original_gloss,word,ort,ipa,cogid, this_pform]);
           keys.push(idx);
           idx += 1;
         }
