@@ -289,8 +289,8 @@ function process_starling(json) {
   /* clean table for negative cognate sets */
   cognate_counter += 1;
   for (var i=1,key; key=table[i]; i++) {
-    if(table[i][7] < 0) {
-      table[i][7] = -cognate_counter;
+    if(table[i][8] < 0) {
+      table[i][8] = -cognate_counter;
       cognate_counter += 1;
     }
   }
