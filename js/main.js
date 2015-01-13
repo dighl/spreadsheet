@@ -200,6 +200,7 @@ function process_starling(json) {
   /* get taxa */
   var taxa = [];
   var proto = '';
+	var varia = [];
   /* determine names with numbers first */
   for (key in json[sheet][0]) {
     if (key.indexOf('#') == key.length -1 && key.toLowerCase().indexOf('proto') != -1) {
@@ -207,10 +208,19 @@ function process_starling(json) {
     }
     else if (key.indexOf('#') == key.length -1) {
       taxa.push(key.slice(0,key.length -2))  
-    } 
+    }			
   }
+
+	for (key in json[sheet][0]) {
+		if (key.toUpperCase() != 'NUMBER' && key.indexOf('#') == -1 && taxa.indexOf(key) == -1 && key.toUpperCase() != '__ROWNUM__' && key.toUpperCase() != 'WORD') {
+			varia.push(key);
+		}
+	}
   
   var table =[["ID",'TAXA','GLOSS','GLOSSID','ORIGINALGLOSS','STARLING','ORTHOGRAPHY',"IPA","COGID","PROTO"]];
+	for (var i=0,varium; varium=varia[i]; i++) {
+		table[0].push(varium);
+	}
   var cognate_counter = 0;
   var current_gloss = '';
   var idx = 1;
@@ -239,8 +249,9 @@ function process_starling(json) {
     }
     for (var j=0,taxon; taxon = taxa[j]; j++) {
       var word = line[taxon];
-      var cogid = parseInt(line[taxon+' #']);
+      var cogid = parseInt(line[taxon+' #'].replace(/\s/g,''));
       if (cogid != 0 && typeof word != 'undefined') {
+        console.log("cogid",gloss,cogid,cognate_counter)
         if (word.replace(/\s/g,'') != '') {
           if (gloss != current_gloss) {
             cognate_counter += cognate_sets.length;
@@ -267,7 +278,7 @@ function process_starling(json) {
           ipa = ipa.replace(/ /g,'_') 
 
           if(cogid > 0) {
-            cogid = cognate_counter + cogid;
+            cogid = parseInt(cognate_counter) + parseInt(cogid);
             if (cognate_sets.indexOf(cogid) == -1) {
               cognate_sets.push(cogid);
             }
@@ -279,7 +290,13 @@ function process_starling(json) {
           else {
             var this_pform = '?';
           }
-          table.push([idx,clean_taxa(taxon),gloss,num,original_gloss,word,ort,ipa,cogid, this_pform]);
+					var to_push = [idx, clean_taxa(taxon), gloss, num, original_gloss, word, ort, ipa, cogid, this_pform];
+					for (var k=0,varium; varium=varia[k]; k++) {
+						to_push.push(line[varium]);
+					}
+					table.push(to_push);
+
+          //table.push([idx,clean_taxa(taxon),gloss,num,original_gloss,word,ort,ipa,cogid, this_pform]);
           keys.push(idx);
           idx += 1;
         }
@@ -335,6 +352,7 @@ function process_reflexes(json) {
   var gloss_name = 'CONCEPT';
   var proto_name = 'PROTO';
   for (key in json[sheet][0]) {
+    console.log("key",key);
     if (key.toUpperCase().indexOf('LNG') == key.length - 3) {
       taxa.push(key);
     }
@@ -350,7 +368,7 @@ function process_reflexes(json) {
       }
     }
   }
-  console.log(varia);
+  console.log('varia',varia);
   console.log(json[sheet][0]);
 
   var table = [];
@@ -423,6 +441,10 @@ function process_wb(wb) {
   if (current_option == 'starling') {
     var table = process_starling(json);
   }
+	else if (current_option == 'starlingx') {
+		TOB = {};
+		var table = process_starling(json);
+	}
   else {
     var table = process_reflexes(json);
   }
